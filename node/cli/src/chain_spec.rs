@@ -16,11 +16,14 @@
 
 //! Substrate chain configurations.
 
+use generic_asset;
+use fees;
 use primitives::{ed25519::Public as AuthorityId, ed25519, sr25519, Pair, crypto::UncheckedInto};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, BalancesConfig, TreasuryConfig,
-	SudoConfig, ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill, GenericAssetConfig, FeesConfig,
+	SessionConfig, StakingConfig, StakerStatus, TimestampConfig, TreasuryConfig, SudoConfig,
+	ContractConfig, GrandpaConfig, IndicesConfig, Permill, Perbill, GenericAssetConfig, FeesConfig,
+	Fee, BalancesConfig
 };
 pub use node_runtime::GenesisConfig;
 use substrate_service;
@@ -112,8 +115,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
-			offline_slash: Perbill::from_billionths(1_000_000),
-			session_reward: Perbill::from_billionths(2_065),
+			offline_slash: Perbill::from_parts(1_000_000),
+			session_reward: Perbill::from_parts(2_065),
 			current_session_reward: 0,
 			validator_count: 7,
 			sessions_per_era: 12,
@@ -157,6 +160,12 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			burn: Permill::from_percent(50),
 		}),
 		contract: Some(ContractConfig {
+			signed_claim_handicap: 2,
+			rent_byte_price: 4,
+			rent_deposit_offset: 1000,
+			storage_size_offset: 8,
+			surcharge_reward: 150,
+			tombstone_deposit: 16,
 			transaction_base_fee,
 			transaction_byte_fee,
 			transfer_fee,
@@ -182,13 +191,16 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			// ids smaller than 1_000_000 are reserved
 			next_asset_id: 1_000_000,
 			create_asset_stake: 1000,
-			transfer_fee,
 			staking_asset_id: 0,
 			spending_asset_id: 1,
 		}),
 		fees: Some(FeesConfig {
-			transaction_base_fee,
-			transaction_byte_fee,
+			_genesis_phantom_data: rstd::marker::PhantomData {},
+			fee_registry: vec![
+				(Fee::fees(fees::Fee::Base), transaction_base_fee),
+				(Fee::fees(fees::Fee::Bytes), transaction_byte_fee),
+				(Fee::generic_asset(generic_asset::Fee::Transfer), transfer_fee),
+			]
 		}),
 	}
 }
@@ -263,6 +275,12 @@ pub fn testnet_genesis(
 	let transfer_fee = 20;
 
 	let mut contract_config = ContractConfig {
+		signed_claim_handicap: 2,
+		rent_byte_price: 4,
+		rent_deposit_offset: 1000,
+		storage_size_offset: 8,
+		surcharge_reward: 150,
+		tombstone_deposit: 16,
 		transaction_base_fee: transaction_base_fee,
 		transaction_byte_fee: transaction_byte_fee,
 		transfer_fee: transfer_fee,
@@ -363,13 +381,16 @@ pub fn testnet_genesis(
 			// ids smaller than 1_000_000 are reserved
 			next_asset_id: 1_000_000,
 			create_asset_stake: 1000,
-			transfer_fee,
 			staking_asset_id: 0,
 			spending_asset_id: 1,
 		}),
 		fees: Some(FeesConfig {
-			transaction_base_fee,
-			transaction_byte_fee,
+			_genesis_phantom_data: rstd::marker::PhantomData {},
+			fee_registry: vec![
+				(Fee::fees(fees::Fee::Base), transaction_base_fee),
+				(Fee::fees(fees::Fee::Bytes), transaction_byte_fee),
+				(Fee::generic_asset(generic_asset::Fee::Transfer), transfer_fee),
+			]
 		}),
 	}
 }

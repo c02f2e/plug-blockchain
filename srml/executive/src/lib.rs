@@ -70,13 +70,15 @@ use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{
 	self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalize,
-	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker
+	OnInitialize, Digest, NumberFor, Block as BlockT, OffchainWorker,
+	Doughnuted,
 };
-use srml_support::{Dispatchable, traits::MakePayment};
+use srml_support::{Dispatchable, additional_traits::ChargeExtrinsicFee, storage};
 use parity_codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
 use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
+use substrate_primitives::storage::well_known_keys;
 
 mod internal {
 	pub const MAX_TRANSACTIONS_SIZE: u32 = 4 * 1024 * 1024;
@@ -109,16 +111,17 @@ impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: MakePayment<System::AccountId, <Block::Extrinsic as Checkable<Context>>::Checked>,
+	Payment,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > ExecuteBlock<Block> for Executive<System, Block, Context, Payment, AllModules> where
+	Payment: ChargeExtrinsicFee<System::AccountId, <Block::Extrinsic as Checkable<Context>>::Checked>,
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
 	fn execute_block(block: Block) {
-		Executive::<System, Block, Context, Payment, AllModules>::execute_block(block);
+		Executive::<System, Block, Context, Payment, AllModules>::execute_block(block)
 	}
 }
 
@@ -126,10 +129,11 @@ impl<
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Context: Default,
-	Payment: MakePayment<System::AccountId, <Block::Extrinsic as Checkable<Context>>::Checked>,
+	Payment,
 	AllModules: OnInitialize<System::BlockNumber> + OnFinalize<System::BlockNumber> + OffchainWorker<System::BlockNumber>,
 > Executive<System, Block, Context, Payment, AllModules> where
-	Block::Extrinsic: Checkable<Context> + Codec,
+	Block::Extrinsic: Checkable<Context> + Codec + Doughnuted,
+	Payment: ChargeExtrinsicFee<System::AccountId, <Block::Extrinsic as Checkable<Context>>::Checked>,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
 	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
@@ -227,7 +231,11 @@ impl<
 
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
 	fn apply_extrinsic_with_len(uxt: Block::Extrinsic, encoded_len: usize, to_note: Option<Vec<u8>>) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
+
 		// Verify that the signature is good.
+		if let Some(d) = uxt.doughnut() {
+			storage::unhashed::put(well_known_keys::DOUGHNUT_KEY, &d);
+		}
 		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
 		// Check the size of the block if that extrinsic is applied.
@@ -243,7 +251,7 @@ impl<
 			) }
 
 			// pay any fees
-			Payment::make_payment(sender, encoded_len, &xt).map_err(|_| internal::ApplyError::CantPay)?;
+			Payment::charge_extrinsic_fee(sender, encoded_len, &xt).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 
@@ -260,6 +268,7 @@ impl<
 		// Decode parameters and dispatch
 		let (f, s) = xt.deconstruct();
 		let r = f.dispatch(s.into());
+		storage::unhashed::kill(well_known_keys::DOUGHNUT_KEY);
 		<system::Module<System>>::note_applied_extrinsic(&r, encoded_len as u32);
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| match e {
@@ -315,7 +324,7 @@ impl<
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees
-			if Payment::make_payment(sender, encoded_len, &xt).is_err() {
+			if Payment::charge_extrinsic_fee(sender, encoded_len, &xt).is_err() {
 				return TransactionValidity::Invalid(ApplyError::CantPay as i8)
 			}
 
@@ -443,7 +452,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("4c10fddf15e63c91ff2aa13ab3a9b7f6b19938d533829489e72ba40278a08fac").into(),
+					state_root: hex!("ac2840371d51ff2e036c8fc05af7313b7a030f735c38b2f03b94cbe87bfbb7c9").into(),
 					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},

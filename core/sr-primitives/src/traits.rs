@@ -687,6 +687,8 @@ pub trait Applyable: Sized + Send + Sync {
 	fn index(&self) -> Option<&Self::Index>;
 	/// Returns a reference to the sender if any.
 	fn sender(&self) -> Option<&Self::AccountId>;
+	/// Returns a reference to the call.
+	fn call(&self) -> &Self::Call;
 	/// Deconstructs into function call and sender.
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
 }
@@ -731,6 +733,17 @@ pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
 }
 
+/// An `Extrinsic` which may contain a `Doughnut`
+pub trait Doughnuted {
+	/// The concrete Doughnut impl type
+	type Doughnut: Encode + Clone;
+
+	/// Returns a reference to the Doughnut, if any
+	fn doughnut(&self) -> Option<&Self::Doughnut> {
+		None
+	}
+}
+
 /// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
 pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
 
@@ -745,6 +758,12 @@ impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+impl<'a, T> rstd::ops::DerefMut for ApiRef<'a, T> {
+	fn deref_mut(&mut self) -> &mut T {
+		&mut self.0
 	}
 }
 

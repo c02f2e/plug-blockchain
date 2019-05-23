@@ -323,10 +323,7 @@ mod tests {
 				authorities: vec![],
 			}),
 			generic_asset: Some(Default::default()),
-			fees: Some(FeesConfig {
-				transaction_base_fee: 1,
-				transaction_byte_fee: 0,
-			}),
+			fees: Some(Default::default()),
 		}.build_storage().unwrap().0)
 	}
 
@@ -750,7 +747,13 @@ mod tests {
 
 		runtime_io::with_externalities(&mut t, || {
 			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
-			assert_eq!(&contract::CodeHashOf::<Runtime>::get(addr).unwrap(), &transfer_ch);
+			assert_eq!(
+				&contract::ContractInfoOf::<Runtime>::get(addr)
+					.and_then(|c| c.get_alive())
+					.unwrap()
+					.code_hash,
+				&transfer_ch
+			);
 		});
 	}
 

@@ -19,7 +19,6 @@
 #![warn(missing_docs)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 use runtime_primitives::{
 	generic, traits::{Verify, BlakeTwo256}, OpaqueExtrinsic, AnySignature
@@ -59,7 +58,7 @@ pub type Hash = primitives::H256;
 pub type Timestamp = u64;
 
 /// Header type.
-/// 
+///
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, generic::DigestItem<Hash, AuthorityId, AuthoritySignature>>;
 /// Block type.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;

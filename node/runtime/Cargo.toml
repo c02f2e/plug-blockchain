@@ -41,6 +41,10 @@ generic-asset = { package = "prml-generic-asset", path = "../../prml/generic-ass
 fees = { package = "prml-fees", path = "../../prml/fees", default-features = false }
 attestation = { package = "prml-attestation", path = "../../prml/attestation", default-features = false }
 
+#[dev-dependencies]
+# Needs `default-features = false` or we get `ring` compilation failure
+runtime-io = { package = "sr-io", path = "../../core/sr-io", default-features = false }
+
 [features]
 default = ["std"]
 core = [
@@ -69,6 +73,7 @@ std = [
 	"treasury/std",
 	"sudo/std",
 	"version/std",
+	"runtime-io/std",
 	"node-primitives/std",
 	"serde",
 	"safe-mix/std",

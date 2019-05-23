@@ -1,26 +1,26 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
-// This file is part of Substrate.
-
-// Substrate is free software: you can redistribute it and/or modify
+// Copyright (C) 2019 Centrality Investments Limited
+// This file is part of PLUG.
+//
+// This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-
-// Substrate is distributed in the hope that it will be useful,
+//
+// This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-
+//
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Test utilities
-
 #![cfg(test)]
 
 use crate::{system, GenesisConfig, Module, OnFeeCharged, Trait};
 use generic_asset::SpendingAssetCurrency;
-use substrate_primitives::{Blake2Hasher, H256};
+use parity_codec::{Decode, Encode};
+use primitives::{Blake2Hasher, H256};
 use runtime_io;
 use runtime_primitives::BuildStorage;
 use runtime_primitives::{
@@ -43,6 +43,12 @@ impl_outer_event! {
 	}
 }
 
+#[derive(Clone, PartialEq, Eq, Debug, Encode, Decode)]
+pub enum MockFee {
+	Base,
+	Bytes,
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Test;
@@ -63,7 +69,6 @@ impl system::Trait for Test {
 impl generic_asset::Trait for Test {
 	type Balance = u64;
 	type AssetId = u32;
-	type ChargeFee = Fees;
 	type Event = TestEvent;
 }
 
@@ -90,10 +95,11 @@ impl<T: OnFeeChargedMockTrait> OnFeeCharged<u64> for OnFeeChargedMockModule<T> {
 impl OnFeeChargedMockTrait for Test {}
 
 impl Trait for Test {
-	type Call = Call<Self>;
 	type Event = TestEvent;
 	type Currency = SpendingAssetCurrency<Test>;
 	type OnFeeCharged = OnFeeChargedMock;
+	type BuyFeeAsset = ();
+	type Fee = MockFee;
 }
 
 pub type System = system::Module<Test>;
@@ -112,15 +118,8 @@ impl Default for ExtBuilder {
 		}
 	}
 }
+
 impl ExtBuilder {
-	pub fn transaction_base_fee(mut self, transaction_base_fee: u64) -> Self {
-		self.transaction_base_fee = transaction_base_fee;
-		self
-	}
-	pub fn transaction_byte_fee(mut self, transaction_byte_fee: u64) -> Self {
-		self.transaction_byte_fee = transaction_byte_fee;
-		self
-	}
 	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let (mut t, mut c) = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		let _ = generic_asset::GenesisConfig::<Test> {
@@ -131,14 +130,17 @@ impl ExtBuilder {
 			create_asset_stake: 10,
 			initial_balance: u64::max_value(),
 			next_asset_id: 10_000,
-			transfer_fee: 0,
 		}
 		.assimilate_storage(&mut t, &mut c);
 		let _ = GenesisConfig::<Test> {
-			transaction_base_fee: self.transaction_base_fee,
-			transaction_byte_fee: self.transaction_byte_fee,
+			_genesis_phantom_data: rstd::marker::PhantomData::<Test>,
+			fee_registry: vec![
+				(MockFee::Base, self.transaction_base_fee),
+				(MockFee::Bytes, self.transaction_byte_fee),
+			],
 		}
 		.assimilate_storage(&mut t, &mut c);
+
 		t.into()
 	}
 }

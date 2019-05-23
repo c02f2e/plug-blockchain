@@ -17,7 +17,6 @@
 //! Support code for the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[macro_use]
 extern crate bitmask;
@@ -46,6 +45,8 @@ mod hashable;
 #[macro_use]
 pub mod event;
 #[macro_use]
+pub mod fee;
+#[macro_use]
 mod origin;
 #[macro_use]
 pub mod metadata;
@@ -56,6 +57,7 @@ pub mod inherent;
 mod double_map;
 pub mod traits;
 pub mod additional_traits;
+pub mod doughnut;
 
 pub use self::storage::{StorageList, StorageValue, StorageMap, EnumerableStorageMap, StorageDoubleMap};
 pub use self::hashable::Hashable;

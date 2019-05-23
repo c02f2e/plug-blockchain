@@ -1,7 +1,6 @@
 //! The Substrate Node Template runtime. This can be compiled with `#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
@@ -32,7 +31,7 @@ pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
-pub use support::{StorageValue, construct_runtime};
+pub use support::{StorageValue, construct_runtime, additional_traits::DummyChargeFee};
 
 /// The type that is used for identifying authorities.
 pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
@@ -225,7 +224,7 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalCompactExtrinsic<Address, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Nonce, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, Context, Balances, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, Context, DummyChargeFee<AccountId, CheckedExtrinsic>, AllModules>;
 
 // Implement our runtime API endpoints. This is just a bunch of proxying.
 impl_runtime_apis! {

@@ -232,6 +232,12 @@ macro_rules! construct_runtime {
 				$name: $module:: $( < $module_instance >:: )? { $( $modules $( <$modules_generic $(, $modules_instance)?> )* ),* }
 			),*
 		);
+		$crate::__decl_outer_fee!(
+			$runtime;
+			$(
+				$name: $module:: $( < $module_instance >:: )? { $( $modules ),* }
+			),*
+		);
 		$crate::__decl_outer_origin!(
 			$runtime;
 			$(
@@ -343,7 +349,7 @@ macro_rules! __create_decl_macro {
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: < $module_instance:ident >:: {
-					$macro_enum_name <$event_generic:ident, $event_instance:path> $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+					$macro_enum_name <$event_generic:ident, $event_instance:path> $d(, $ignore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -362,7 +368,7 @@ macro_rules! __create_decl_macro {
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: < $module_instance:ident >:: {
-					$macro_enum_name $d( <$event_generic:ident> )* $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+					$macro_enum_name $d( <$event_generic:ident> )* $d(, $ignore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -378,7 +384,7 @@ macro_rules! __create_decl_macro {
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: {
-					$macro_enum_name $d( <$event_generic:ident $d(, $event_instance:path)?> )* $d(, $ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
+					$macro_enum_name $d( <$event_generic:ident $d(, $event_instance:path)?> )* $d(, $ignore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -397,7 +403,7 @@ macro_rules! __create_decl_macro {
 				$d( $system:ident )?;
 				{ $d( $parsed:tt )* };
 				$name:ident : $module:ident:: $d( < $module_instance:ident >:: )? {
-					$ingore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* $d(, $modules:ident $d( <$modules_generic:ident $d(, $modules_instance:path)?> )* )*
+					$ignore:ident $d( <$ignor:ident $d(, $ignore_instance:path)?> )* $d(, $modules:ident $d( <$modules_generic:ident $d(, $modules_instance:path)?> )* )*
 				},
 				$d( $rest:tt )*
 			) => {
@@ -446,6 +452,94 @@ macro_rules! __create_decl_macro {
 __create_decl_macro!(__decl_outer_event, impl_outer_event, Event, $);
 __create_decl_macro!(__decl_outer_origin, impl_outer_origin, Origin, $);
 
+/// A macro that generates an outer fee type for the Runtime
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __decl_outer_fee {
+	(
+		$runtime:ident;
+		$( $name:ident : $module:ident:: $( < $module_instance:ident >:: )? {
+			$( $modules:ident ),*
+		}),*
+	) => {
+		$ crate::__decl_outer_fee!(@inner
+			$runtime;
+			{}; // Initial call  with empty 'parsed' set
+			$(
+				$name: $module:: $( < $module_instance >:: )? {
+					$( $modules ),*
+				},
+			)*
+		);
+	};
+	(@inner
+		$runtime:ident;
+		{ $( $parsed:tt )* };
+		$name:ident : $module:ident:: {
+			// Check if first Module has a head module `Fee`,
+			Fee $(, $ignore:ident )*
+		},
+		$( $rest:tt )*
+	) => {
+		$ crate::__decl_outer_fee!(@inner
+			$runtime;
+			{
+				$( $parsed )*
+				// Add the parsed module with `Fee` to 'parsed' and queue next recursive call
+				$module ,
+			};
+			$( $rest )*
+		);
+	};
+	(@inner
+		$runtime:ident;
+		{ $( $parsed:tt )* };
+		$name:ident : $module:ident:: $( < $module_instance:ident >:: )? {
+			// Matches here if first module wasn't a `Fee`.
+			// e.g $modules may look like {`Call<T>`, `Log`, `Fee`},
+			// We pop the current module and recurse e.g. {`Log`, `Fee`}
+			// This will match another arm when `Fee` is the head elem
+			$ignore:ident $(, $modules:ident )*
+		},
+		$( $rest:tt )*
+	) => {
+		$ crate::__decl_outer_fee!(@inner
+			$runtime;
+			{ $( $parsed )* };
+			// Recurse with the next module as head
+			$name: $module:: $( < $module_instance >:: )? { $( $modules ),* },
+			$( $rest )*
+		);
+	};
+	(@inner
+		$runtime:ident;
+		{ $( $parsed:tt )* };
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {},
+		$( $rest:tt )*
+	) => {
+		// We've nibbled all the modules and didn't find `Fee` declared
+		// hence this module will be ignored from the final outer `Fee`
+		// e.g. `Timestamp: timestamp::{`Call<T>`, `Log`, `Inherent(T)`}` would be removed from processing here.
+		$ crate::__decl_outer_fee!(@inner
+			$runtime;
+			{ $( $parsed )* };
+			$( $rest )*
+		);
+	};
+	(@inner
+		$runtime:ident;
+		{ $( $parsed_modules:ident $( $instance:ident )? ,)* };
+	) => {
+		$ crate::impl_outer_fee! {
+			pub enum Fee {
+				$(
+					$parsed_modules $(_ $instance )? ,
+				)*
+			}
+		}
+	}
+}
+
 /// A macro that defines all modules as an associated types of the Runtime type.
 #[macro_export]
 #[doc(hidden)]
@@ -485,7 +579,7 @@ macro_rules! __decl_all_modules {
 		$runtime:ident;
 		$( $system:ident )?;
 		{ $( $parsed:tt )* };
-		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { $ingore:ident $(, $modules:ident )* },
+		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? { $ignore:ident $(, $modules:ident )* },
 		$( $rest:tt )*
 	) => {
 		$crate::__decl_all_modules!(
@@ -532,7 +626,7 @@ macro_rules! __decl_outer_dispatch {
 		$runtime:ident;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		System: $module:ident::{
-			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
+			$ignore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
 		}
 		$(, $rest_name:ident : $rest_module:ident::{
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
@@ -572,7 +666,7 @@ macro_rules! __decl_outer_dispatch {
 		$runtime:ident;
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		$name:ident: $module:ident::{
-			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
+			$ignore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
 		}
 		$(, $rest_name:ident : $rest_module:ident::{
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
@@ -783,7 +877,7 @@ macro_rules! __decl_outer_config {
 		$runtime:ident;
 		{ $( $parsed:tt )* };
 		$name:ident: $module:ident:: $( < $module_instance:ident >:: )? {
-			$ingore:ident $( <$ignor:ident $(, $ignore_instance:path)?> )* $(, $modules:ident $( <$modules_generic:ident $(, $modules_instance:path)?> )* )*
+			$ignore:ident $( <$ignor:ident $(, $ignore_instance:path)?> )* $(, $modules:ident $( <$modules_generic:ident $(, $modules_instance:path)?> )* )*
 		},
 		$( $rest:tt )*
 	) => {
@@ -880,7 +974,7 @@ macro_rules! __decl_outer_inherent {
 		$uncheckedextrinsic:ident;
 		$( $parsed_name:ident :: $parsed_call:ident ),*;
 		$name:ident: $module:ident::{
-			$ingore:ident $( ( $( $ignor:ident )* ) )*
+			$ignore:ident $( ( $( $ignor:ident )* ) )*
 				$(, $modules:ident $( ( $( $modules_call:ident )* ) )* )*
 		}
 		$(, $rest_name:ident : $rest_module:ident::{
